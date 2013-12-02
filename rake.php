@@ -217,7 +217,7 @@ class Rake {
         // Calculate Word scores = deg(w)/frew(w)
         $aWordScores = array();
         foreach ($aWordFrequency as $sPhrase => $nFrequency) {
-            $aWordScores[$sPhrase] = $aWordDegree[$sPhrase]/($nFrequency * 1.0);
+            $aWordScores[$sPhrase] = $aWordDegree[$sPhrase]/$nFrequency;
         }
 
         return $aWordScores;
