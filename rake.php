@@ -93,7 +93,7 @@ class Rake {
         $aWordScores = $this->calculateWordScores($aCandidateKeywords, $nMinWordCharacters);
 
         // Calculate Scores for Candidate Keywords
-        $aScoredKeywords = $this->generateCandidateKeywordScores($aCandidateKeywords, $aWordScores);
+        $aScoredKeywords = $this->generateCandidateKeywordScores($aCandidateKeywords, $aWordScores, $nMinWordCharacters);
         if ($this->bDebug) { print_r($aScoredKeywords); }
 
         // Sort Keywords
@@ -157,8 +157,7 @@ class Rake {
 
         $aStopWordRegExList = array();
         for ($i = count($aStopWordList) - 1; $i >= 0; $i--) {
-            $sWordRegEx = '\b' . $aStopWordList[$i] . '\b';
-            $aStopWordRegExList[] = $sWordRegEx;
+            $aStopWordRegExList[] = '\b'.$aStopWordList[$i].'\b';
         }
         $sPattern = '/'.implode('|', $aStopWordRegExList).'/';
         return $sPattern;
@@ -173,7 +172,7 @@ class Rake {
     protected function generateCandidateKeywords($aSentenceList, $sStopWordPattern)
     {
         if (empty($aSentenceList)) { return array(); }
-        if (empty($sStopWordPattern)) { return $aSentenceList; }
+        if (empty($sStopWordPattern) || $sStopWordPattern === "//") { return $aSentenceList; }
 
         $aPhraseList = array();
 
@@ -182,7 +181,7 @@ class Rake {
             $aPhrases = explode('|', $sTmp);
             for ($j = count($aPhrases) - 1; $j >= 0; $j--) {
                 $sPhrase = strtolower(trim($aPhrases[$j]));
-                if ($sPhrase != "") {
+                if ($sPhrase !== "") {
                     $aPhraseList[] = $sPhrase;
                 }
             }
@@ -193,29 +192,30 @@ class Rake {
     /**
     * Utility function to calculate the scores of individual words.
     * @param array $aPhraseList List of phrases to calculate scores for.
-    * @param integer $nMinWordCharacters Minimum number of characters for a word to be considered a keyword. 
+    * @param integer $nMinWordCharacters Minimum number of characters for a word to be considered a keyword.
     * @return array Hash of type phrase => score.
     */
     protected function calculateWordScores($aPhraseList, $nMinWordCharacters) {
         $aWordFrequency = array();
         $aWordDegree = array();
+
         for ($i = count($aPhraseList) - 1; $i >= 0; $i--) {
             $aWordList = $this->separatewords($aPhraseList[$i], $nMinWordCharacters);
-            $nWordListLength = count($aWordList);
-            $nWordListDegree = $nWordListLength - 1;
-            for ($j = count($aWordList) - 1; $j >= 0; $j--) {
+            $nWordListDegree = count($aWordList) - 1;
+            for ($j = $nWordListDegree; $j >= 0; $j--) {
                 $aWordFrequency[$aWordList[$j]] = isset($aWordFrequency[$aWordList[$j]]) ? $aWordFrequency[$aWordList[$j]] + 1 : 1;
                 $aWordDegree[$aWordList[$j]] = isset($aWordDegree[$aWordList[$j]]) ? $aWordDegree[$aWordList[$j]] + $nWordListDegree : $nWordListDegree;
             }
         }
-        foreach ($aWordFrequency as $sPhrase => $nFrequency) {
-            $aWordDegree[$sPhrase] = $aWordDegree[$sPhrase] + $nFrequency;
+        
+        foreach ($aWordFrequency as $sWord => $nFrequency) {
+            $aWordDegree[$sWord] = $aWordDegree[$sWord] + $nFrequency;
         }
 
-        // Calculate Word scores = deg(w)/frew(w)
+        // Calculate Word scores = deg(w)/freq(w)
         $aWordScores = array();
-        foreach ($aWordFrequency as $sPhrase => $nFrequency) {
-            $aWordScores[$sPhrase] = $aWordDegree[$sPhrase]/$nFrequency;
+        foreach ($aWordFrequency as $sWord => $nFrequency) {
+            $aWordScores[$sWord] = $aWordDegree[$sWord]/$nFrequency;
         }
 
         return $aWordScores;
@@ -230,16 +230,16 @@ class Rake {
     protected function separateWords($sText, $nMinWordCharacters)
     {
         $sPattern = "/[^a-zA-Z0-9_\+\-]/";
-        $aWords = array();
-        $aSplit = preg_split($sPattern, $sText);
-        for ($i = count($aSplit) - 1; $i >= 0; $i--) {
-            $sCurrWord = strtolower(trim($aSplit[$i]));
+        $aCleanWords = array();
+        $aWords = preg_split($sPattern, $sText);
+        for ($i = count($aWords) - 1; $i >= 0; $i--) {
+            $sWord = strtolower(trim($aWords[$i]));
             // leave numbers in phrase, but don't count as words, since they tend to inflate scores of their phrases
-            if (strlen($aSplit[$i]) > $nMinWordCharacters && !empty($aSplit[$i]) && !is_numeric($aSplit[$i])) {
-                $aWords[] = $aSplit[$i];
+            if (strlen($sWord) > $nMinWordCharacters && !empty($sWord) && !is_numeric($sWord)) {
+                $aCleanWords[] = $sWord;
             }
         }
-        return $aWords;
+        return $aCleanWords;
     }
 
     /**
@@ -248,11 +248,11 @@ class Rake {
     * @param array $aWordScores Hash with Phrase Scores
     * @return array Hash of type keyword => score
     */
-    protected function generateCandidateKeywordScores($aCandidateKeywords, $aWordScores) {
+    protected function generateCandidateKeywordScores($aCandidateKeywords, $aWordScores, $nMinWordCharacters) {
         $aScoredKeywords = array();
         for ($i = count($aCandidateKeywords) - 1; $i >= 0; $i--) {
             $aScoredKeywords[$aCandidateKeywords[$i]] = 0;
-            $aWords = $this->separateWords($aCandidateKeywords[$i],0);
+            $aWords = $this->separateWords($aCandidateKeywords[$i], $nMinWordCharacters);
             $nKeywordScore = 0;
             for ($j = count($aWords) - 1; $j >= 0; $j--) {
                 if (isset($aWordScores[$aWords[$j]])) { $nKeywordScore += $aWordScores[$aWords[$j]]; }
