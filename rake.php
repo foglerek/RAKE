@@ -130,10 +130,8 @@ class Rake {
     {
         $aStopWords = array();
 
-        try {
-            $handle = fopen($sStopWordFilePath, "rb");
-        } catch (Exception $e) {
-            throw new Exception("loadStopWordsFromFile() could not load file with path '".$sStopWordFilePath."':\n".$e->getMessage());
+        if (($handle = @fopen($sStopWordFilePath, "rb")) === false) {
+            throw new Exception("loadStopWordsFromFile() could not load file with path '".$sStopWordFilePath);
         }
 
         while (($sLine = fgets($handle)) !== false) {
